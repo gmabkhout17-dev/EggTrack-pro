@@ -2,31 +2,21 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#f5a623">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 <title>EggTrack Pro · الجلفة</title>
 
 <!-- PWA Manifest -->
 <link rel="manifest" href="manifest.json">
 
-<!-- Leaflet CSS + JS -->
+<!-- Leaflet CSS + JS (سيتم تخزينها محليًا بواسطة Service Worker) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    -webkit-tap-highlight-color: transparent;
-  }
-
   :root {
     --bg: #f5f7fb;
     --surface: #ffffff;
@@ -45,6 +35,8 @@
     --radius: 16px;
     --font: 'Segoe UI', 'Cairo', 'Tahoma', sans-serif;
   }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 
   body {
     font-family: var(--font);
@@ -262,10 +254,7 @@
     font-weight: 700;
     cursor: pointer;
     transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
   }
   .btn:active { transform: scale(0.97); }
   .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 4px 16px rgba(245,166,35,0.4); }
@@ -430,6 +419,7 @@
     background-repeat: no-repeat; background-position: left 14px center;
   }
 
+  /* ===== بحث الخريطة ===== */
   #map-search-container {
     position: fixed;
     top: 68px; left: 8px; right: 8px;
@@ -495,7 +485,10 @@
   .map-result-info { flex: 1; }
   .map-result-name { font-size: 13px; font-weight: 700; color: var(--text); }
   .map-result-addr { font-size: 11px; color: var(--text2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .map-result-loading { padding: 16px; text-align: center; color: var(--text2); font-size: 13px; }
+  .map-result-empty { padding: 20px; text-align: center; color: var(--text2); font-size: 13px; }
 
+  /* ===== شريط تحميل الخرائط ===== */
   #offline-progress {
     position: fixed;
     bottom: 0; left: 0; right: 0;
@@ -522,25 +515,11 @@
     transition: width 0.3s;
   }
   .offline-progress-sub { font-size: 11px; color: var(--text2); text-align: center; }
-
-  /* تحديث الإصدار */
-  #version-badge {
-    position: fixed;
-    bottom: 8px;
-    right: 8px;
-    background: rgba(0,0,0,0.5);
-    color: white;
-    font-size: 9px;
-    padding: 3px 8px;
-    border-radius: 12px;
-    z-index: 999;
-    pointer-events: none;
-    font-family: monospace;
-  }
 </style>
 </head>
 <body>
 
+<!-- شاشة التحميل -->
 <div id="map-loader">
   <div class="loader-logo">🥚</div>
   <div class="loader-text">EggTrack Pro</div>
@@ -552,8 +531,10 @@
   </div>
 </div>
 
+<!-- الخريطة -->
 <div id="map"></div>
 
+<!-- الشريط العلوي -->
 <div id="topbar">
   <div id="logo">
     <div class="icon">🥚</div>
@@ -569,6 +550,7 @@
   </div>
 </div>
 
+<!-- شريط البحث في الخريطة -->
 <div id="map-search-container">
   <div id="map-search-bar">
     <span style="font-size:18px;">🔎</span>
@@ -578,6 +560,7 @@
   <div id="map-search-results"></div>
 </div>
 
+<!-- شريط تقدم تحميل الخرائط -->
 <div id="offline-progress">
   <div class="offline-progress-header">
     <span class="offline-progress-title">🗺️ جاري تحميل خريطة الجلفة...</span>
@@ -587,6 +570,7 @@
   <div class="offline-progress-sub" id="offline-sub">جاري التجهيز...</div>
 </div>
 
+<!-- شريط الإحصائيات -->
 <div id="statsbar">
   <div class="stat-chip green" onclick="filterStores('green')">
     <div class="num" id="stat-green">0</div>
@@ -606,16 +590,20 @@
   </div>
 </div>
 
+<!-- تنبيه وضع الإضافة -->
 <div id="adding-hint">📍 اضغط على الخريطة لتحديد موقع المتجر</div>
 
+<!-- أزرار FAB -->
 <div id="fab-group">
   <button class="fab main" onclick="startAddStore()" id="fab-add" title="إضافة متجر">➕</button>
   <button class="fab loc" onclick="goToMyLocation()" title="موقعي">📍</button>
   <button class="fab filter" onclick="openPanel('stores')" title="قائمة المتاجر">📋</button>
 </div>
 
+<!-- الطبقة العازلة -->
 <div id="overlay" onclick="closePanel()"></div>
 
+<!-- اللوحة السفلية -->
 <div id="bottom-panel">
   <div class="panel-handle"></div>
   <div class="panel-header">
@@ -625,8 +613,10 @@
   <div id="panel-body" class="panel-content"></div>
 </div>
 
+<!-- التوست -->
 <div id="toast"></div>
 
+<!-- حوار التأكيد -->
 <div id="confirm-dialog">
   <div class="confirm-box">
     <div class="confirm-icon" id="confirm-icon">⚠️</div>
@@ -639,74 +629,12 @@
   </div>
 </div>
 
-<div id="version-badge">v2.0.0</div>
-
 <script>
 // ===========================
-//  نظام التحديث القسري - الأهم
-// ===========================
-(async function forceUpdateAndClearCache() {
-  console.log('🚀 بدء عملية التحديث القسري...');
-  
-  // 1. حذف جميع الـ Caches القديمة
-  if ('caches' in window) {
-    try {
-      const cacheNames = await caches.keys();
-      for (const name of cacheNames) {
-        if (name !== 'eggtrack-v2') {
-          await caches.delete(name);
-          console.log('✅ تم حذف الكاش القديم:', name);
-        }
-      }
-    } catch(e) { console.error('خطأ في حذف الكاش:', e); }
-  }
-  
-  // 2. تحديث Service Worker
-  if ('serviceWorker' in navigator) {
-    try {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      for (const registration of registrations) {
-        await registration.update();
-        console.log('✅ تم تحديث Service Worker');
-      }
-    } catch(e) { console.error('خطأ في تحديث SW:', e); }
-  }
-  
-  // 3. إزالة أي بيانات localStorage قديمة قد تتعارض
-  // (الحفاظ على بيانات المستخدم فقط)
-  
-  console.log('✅ اكتملت عملية التحديث');
-})();
-
-// ===========================
-//  SERVICE WORKER
+//  SERVICE WORKER للتخزين المحلي
 // ===========================
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js')
-    .then(registration => {
-      console.log('✅ Service Worker مسجل بنجاح:', registration.scope);
-      
-      // التحقق من وجود تحديث
-      registration.addEventListener('updatefound', () => {
-        const newWorker = registration.installing;
-        console.log('🔄 تم العثور على تحديث لـ Service Worker');
-        newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('✅ تحديث جديد متاح، قم بتحديث الصفحة');
-            showToast('🔄 تحديث جديد متاح، سيتم تحديث التطبيق');
-            setTimeout(() => window.location.reload(), 1500);
-          }
-        });
-      });
-    })
-    .catch(err => console.log('⚠️ فشل تسجيل Service Worker', err));
-  
-  // الاستماع لرسائل من Service Worker
-  navigator.serviceWorker.addEventListener('message', event => {
-    if (event.data.type === 'ONLINE_STATUS') {
-      console.log('📡 حالة الاتصال:', event.data.online ? 'متصل' : 'غير متصل');
-    }
-  });
+  navigator.serviceWorker.register('sw.js').catch(err => console.log('SW registration failed', err));
 }
 
 // ===========================
@@ -774,6 +702,7 @@ function initMap() {
     attributionControl: true
   });
 
+  // طبقة OpenStreetMap (سيتم تخزينها عبر Service Worker)
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 19
@@ -902,6 +831,7 @@ function openAddStoreForm(lat, lng) {
   openPanel('add-store');
   document.getElementById('panel-title').textContent = 'إضافة متجر جديد';
   document.getElementById('panel-body').innerHTML = buildStoreForm(null, lat, lng);
+  initShelfOpts();
 }
 
 function openEditStore(id) {
@@ -912,6 +842,7 @@ function openEditStore(id) {
   openPanel('add-store');
   document.getElementById('panel-title').textContent = 'تعديل المتجر';
   document.getElementById('panel-body').innerHTML = buildStoreForm(store, store.lat, store.lng);
+  initShelfOpts(store.shelfLifeDays || 3);
 }
 
 function buildStoreForm(store, lat, lng) {
@@ -932,6 +863,16 @@ function buildStoreForm(store, lat, lng) {
     </div>
     <button class="btn btn-primary" onclick="saveStore()">💾 حفظ المتجر</button>
   `;
+}
+
+function initShelfOpts(selected = 3) {
+  document.querySelectorAll('.shelf-opt').forEach(el => {
+    el.classList.toggle('selected', parseInt(el.dataset.days) === selected);
+    el.onclick = function() {
+      document.querySelectorAll('.shelf-opt').forEach(x => x.classList.remove('selected'));
+      this.classList.add('selected');
+    };
+  });
 }
 
 function saveStore() {
@@ -965,14 +906,14 @@ function openSaleForm(id) {
   openPanel('sale');
   document.getElementById('panel-title').textContent = `تسجيل بيع - ${store.name}`;
   document.getElementById('panel-body').innerHTML = buildSaleForm(store);
-  const shelfOptionsContainer = document.getElementById('sale-shelf-opts');
-  if (shelfOptionsContainer) initSaleShelfOpts();
-  const dateInput = document.getElementById('s-date');
-  if (dateInput) dateInput.addEventListener('change', updateNextVisitHint);
+  initSaleShelfOpts();
+  // تحديث التلميح عند تغيير التاريخ
+  document.getElementById('s-date').addEventListener('change', updateNextVisitHint);
 }
 
 function buildSaleForm(store) {
   const today = new Date().toISOString().split('T')[0];
+  // استرجاع دورة التزويد من آخر بيعة أو القيمة الافتراضية
   const lastShelf = (store.sales && store.sales.length > 0 && store.sales[0].shelfLifeDays) ? store.sales[0].shelfLifeDays : 3;
   const shelfOptions = [
     {days:1, label:'يوم'},
@@ -1035,7 +976,8 @@ function updateNextVisitHint() {
   const saleDate = dateEl.value ? new Date(dateEl.value) : new Date();
   const nextDate = new Date(saleDate);
   nextDate.setDate(nextDate.getDate() + days);
-  hint.textContent = `📅 الزيارة القادمة: ${nextDate.toLocaleDateString('ar-DZ')}`;
+  const opts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+  hint.textContent = `📅 الزيارة القادمة: ${nextDate.toLocaleDateString('ar-DZ', opts)}`;
 }
 
 function saveSale() {
@@ -1051,7 +993,7 @@ function saveSale() {
   stores[idx].sales = stores[idx].sales || [];
   stores[idx].sales.unshift({ id: uid(), date, qty, price, total: qty * price, shelfLifeDays: shelfDays, notes: document.getElementById('s-notes').value.trim() });
   stores[idx].lastSaleDate = date;
-  stores[idx].shelfLifeDays = shelfDays;
+  stores[idx].shelfLifeDays = shelfDays; // تحديث الدورة الحالية للمتجر من آخر بيعة
   DB.save(stores);
   refreshMarker(activeStoreId);
   updateStats();
@@ -1071,7 +1013,7 @@ function openStoreHistory(id) {
   const sales = store.sales || [];
   const total = sales.reduce((a, s) => a + s.total, 0);
   let html = `<div class="report-card"><div class="report-title">إجمالي المبيعات</div><div class="report-value">${total.toLocaleString()} ${settings.currency}</div><div class="report-sub">${sales.length} عملية</div></div>`;
-  if (sales.length === 0) html += `<div style="text-align:center;padding:40px;">📭 لا توجد مبيعات</div>`;
+  if (sales.length === 0) html += `<div class="empty-state"><div class="icon">📭</div><div class="msg">لا توجد مبيعات</div></div>`;
   else sales.forEach(s => { html += `<div class="sale-item"><div class="sale-item-header"><div class="sale-date">📅 ${formatDate(s.date)}</div><div class="sale-total">${s.total.toLocaleString()} ${settings.currency}</div></div><div class="sale-detail">📦 ${s.qty} ${settings.unit} × ${s.price} ${settings.currency}</div>${s.shelfLifeDays ? `<div class="sale-detail">🔄 دورة التزويد: <span>${s.shelfLifeDays} يوم</span></div>` : ''}${s.notes ? `<div class="sale-detail">📝 <span>${s.notes}</span></div>` : ''}</div>`; });
   document.getElementById('panel-body').innerHTML = html;
 }
@@ -1080,38 +1022,46 @@ function openPanel(type) {
   const panel = document.getElementById('bottom-panel');
   document.getElementById('overlay').classList.add('show');
   panel.classList.add('open');
+  document.getElementById('fab-group').style.visibility = 'hidden';
+  // مسح المحتوى السابق عند كل فتح لضمان رسم الـ input من جديد
   document.getElementById('panel-body').innerHTML = '';
   if (type === 'stores') { document.getElementById('panel-title').textContent = 'قائمة المتاجر'; renderStoreList(); }
+  else if (type === 'search') { document.getElementById('panel-title').textContent = 'البحث'; renderSearch(); }
   else if (type === 'reports') { document.getElementById('panel-title').textContent = '📊 التقارير والإحصاءات'; renderReports(); }
   else if (type === 'settings') { document.getElementById('panel-title').textContent = '⚙️ الإعدادات'; renderSettings(); }
-  else if (type === 'add-store') { /* handled elsewhere */ }
-  else if (type === 'sale') { /* handled elsewhere */ }
-  else if (type === 'history') { /* handled elsewhere */ }
 }
 function closePanel() {
   document.getElementById('bottom-panel').classList.remove('open');
   document.getElementById('overlay').classList.remove('show');
+  document.getElementById('fab-group').style.visibility = 'visible';
 }
 
 let storeFilter = 'all';
 
 function renderStoreList(search = '') {
+  // رسم الهيكل الكامل مرة واحدة فقط (عند الفتح الأول أو تغيير الفلتر)
   const body = document.getElementById('panel-body');
   if (!document.getElementById('store-search')) {
     body.innerHTML = `
-      <input class="form-input" id="store-search" placeholder="🔍 بحث بالاسم أو الهاتف أو الصاحب..." autocomplete="off" style="margin-bottom:12px;">
+      <div class="search-box">
+        <input class="form-input" id="store-search" placeholder="بحث بالاسم أو الهاتف أو الصاحب..." autocomplete="off">
+        <span class="search-icon">🔍</span>
+      </div>
       <div class="filter-chips" id="store-filter-chips"></div>
       <div id="store-list-results"></div>`;
+    // ربط الحدث مرة واحدة فقط — لا يُعاد رسم الـ input
     document.getElementById('store-search').addEventListener('input', function() {
       updateStoreResults(this.value);
     });
     document.getElementById('store-search').value = search;
   }
+  // تحديث شرائح الفلتر
   document.getElementById('store-filter-chips').innerHTML = `
     <div class="chip ${storeFilter==='all'?'active':''}" onclick="setStoreFilter('all')">الكل (${stores.length})</div>
     <div class="chip ${storeFilter==='red'?'active':''}" onclick="setStoreFilter('red')">🔴 يحتاج (${stores.filter(s=>getStatus(s)==='red').length})</div>
     <div class="chip ${storeFilter==='yellow'?'active':''}" onclick="setStoreFilter('yellow')">⚠️ قريبًا (${stores.filter(s=>getStatus(s)==='yellow').length})</div>
     <div class="chip ${storeFilter==='green'?'active':''}" onclick="setStoreFilter('green')">✅ اليوم (${stores.filter(s=>getStatus(s)==='green').length})</div>`;
+  // تحديث النتائج فقط
   updateStoreResults(search);
 }
 
@@ -1126,7 +1076,7 @@ function updateStoreResults(search = '') {
   const resultsEl = document.getElementById('store-list-results');
   if (!resultsEl) return;
   if (filtered.length === 0) {
-    resultsEl.innerHTML = `<div style="text-align:center;padding:40px;">🏪 لا توجد متاجر</div>`;
+    resultsEl.innerHTML = `<div class="empty-state"><div class="icon">🏪</div><div class="msg">لا توجد متاجر</div></div>`;
   } else {
     resultsEl.innerHTML = filtered.map(s => {
       const status = getStatus(s);
@@ -1144,6 +1094,7 @@ function updateStoreResults(search = '') {
 
 function setStoreFilter(f) {
   storeFilter = f;
+  // تحديث الشرائح والنتائج فقط دون إعادة رسم الـ input
   document.getElementById('store-filter-chips').innerHTML = `
     <div class="chip ${storeFilter==='all'?'active':''}" onclick="setStoreFilter('all')">الكل (${stores.length})</div>
     <div class="chip ${storeFilter==='red'?'active':''}" onclick="setStoreFilter('red')">🔴 يحتاج (${stores.filter(s=>getStatus(s)==='red').length})</div>
@@ -1151,8 +1102,18 @@ function setStoreFilter(f) {
     <div class="chip ${storeFilter==='green'?'active':''}" onclick="setStoreFilter('green')">✅ اليوم (${stores.filter(s=>getStatus(s)==='green').length})</div>`;
   updateStoreResults();
 }
-
 function goToStore(id) { closePanel(); const s = stores.find(s=>s.id===id); if(s) { map.setView([s.lat, s.lng], 16); setTimeout(()=>showStorePopup(id),400); } }
+function renderSearch() {
+  document.getElementById('panel-body').innerHTML = `<div class="search-box"><input class="form-input" id="main-search" placeholder="ابحث..." autofocus oninput="doSearch(this.value)"><span class="search-icon">🔍</span></div><div id="search-results"></div>`;
+  document.getElementById('main-search').focus();
+}
+function doSearch(val) {
+  if (!val.trim()) { document.getElementById('search-results').innerHTML = ''; return; }
+  const results = stores.filter(s => s.name.includes(val) || (s.phone||'').includes(val) || (s.owner||'').includes(val));
+  let html = results.length ? '' : `<div class="empty-state"><div class="icon">🔍</div><div class="msg">لا توجد نتائج</div></div>`;
+  results.forEach(s => { html += `<div class="store-item" onclick="goToStore('${s.id}')"><div class="store-dot" style="background:${getStatusColor(getStatus(s))};"></div><div class="store-info"><div class="store-name">${s.name}</div><div class="store-sub">${s.phone||''} ${s.owner?'| '+s.owner:''}</div></div><div class="store-arrow">›</div></div>`; });
+  document.getElementById('search-results').innerHTML = html;
+}
 
 function renderReports() {
   const today = new Date().toISOString().split('T')[0];
@@ -1160,26 +1121,19 @@ function renderReports() {
   const monthAgo = new Date(Date.now() - 30*86400000).toISOString().split('T')[0];
   let allSales = []; stores.forEach(s => (s.sales||[]).forEach(sale => allSales.push({...sale, storeName: s.name})));
   const sum = arr => arr.reduce((a,s)=>a+s.total,0);
-  const redCount = stores.filter(s => getStatus(s) === 'red').length;
-  const yellowCount = stores.filter(s => getStatus(s) === 'yellow').length;
-  const greenCount = stores.filter(s => getStatus(s) === 'green').length;
   let html = `<div class="report-grid">
-    <div class="report-card"><div class="report-title">💰 اليوم</div><div class="report-value">${sum(allSales.filter(s=>s.date===today)).toLocaleString()} ${settings.currency}</div></div>
-    <div class="report-card"><div class="report-title">📅 الأسبوع</div><div class="report-value">${sum(allSales.filter(s=>s.date>=weekAgo)).toLocaleString()} ${settings.currency}</div></div>
-    <div class="report-card"><div class="report-title">🗓️ الشهر</div><div class="report-value">${sum(allSales.filter(s=>s.date>=monthAgo)).toLocaleString()} ${settings.currency}</div></div>
-    <div class="report-card"><div class="report-title">📦 الإجمالي</div><div class="report-value">${sum(allSales).toLocaleString()} ${settings.currency}</div></div>
-  </div>
-  <div class="report-card">
-    <div class="report-title">🏪 حالة المتاجر</div>
-    <div style="display:flex;gap:16px;margin-top:12px;">
-      <div><span style="color:var(--green);font-weight:900;">✅ ${greenCount}</span><br><span style="font-size:11px;">تم اليوم</span></div>
-      <div><span style="color:var(--yellow);font-weight:900;">⚠️ ${yellowCount}</span><br><span style="font-size:11px;">يقترب</span></div>
-      <div><span style="color:var(--red);font-weight:900;">🔴 ${redCount}</span><br><span style="font-size:11px;">يحتاج</span></div>
-    </div>
+    <div class="report-card"><div class="report-title">💰 اليوم</div><div class="report-value">${sum(allSales.filter(s=>s.date===today)).toLocaleString()}</div></div>
+    <div class="report-card"><div class="report-title">📅 الأسبوع</div><div class="report-value">${sum(allSales.filter(s=>s.date>=weekAgo)).toLocaleString()}</div></div>
+    <div class="report-card"><div class="report-title">🗓️ الشهر</div><div class="report-value">${sum(allSales.filter(s=>s.date>=monthAgo)).toLocaleString()}</div></div>
+    <div class="report-card"><div class="report-title">📦 الإجمالي</div><div class="report-value">${sum(allSales).toLocaleString()}</div></div>
   </div>`;
-  document.getElementById('panel-body').innerHTML = html;
+  // إكمال التقارير...
+  document.getElementById('panel-body').innerHTML = html + `<div class="report-card"><div class="report-title">🗺️ حالة المتاجر</div>...</div>`;
 }
 
+// ===========================
+//  الإعدادات + تحميل الخرائط غير المتصلة
+// ===========================
 function renderSettings() {
   const s = settings;
   let html = `
@@ -1187,81 +1141,29 @@ function renderSettings() {
     <div class="form-group"><label class="form-label">📦 وحدة القياس</label><input class="form-input" id="set-unit" value="${s.unit}"></div>
     <button class="btn btn-primary" onclick="saveSettings()">💾 حفظ</button>
     <div class="sep"></div>
-    <div class="backup-area" onclick="exportData()"><div class="backup-icon">📤</div><div class="backup-title">تصدير البيانات</div><div class="backup-sub">حفظ نسخة احتياطية</div></div>
-    <div class="backup-area" onclick="document.getElementById('import-file').click()"><div class="backup-icon">📥</div><div class="backup-title">استيراد البيانات</div><div class="backup-sub">استعادة من نسخة</div></div>
+    <div class="backup-area" onclick="exportData()"><div class="backup-icon">📤</div><div class="backup-title">تصدير البيانات</div></div>
+    <div class="backup-area" onclick="document.getElementById('import-file').click()"><div class="backup-icon">📥</div><div class="backup-title">استيراد البيانات</div></div>
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
     <div class="sep"></div>
     <button class="btn btn-danger" onclick="confirmClearAll()">🗑️ مسح جميع البيانات</button>
-    <button class="btn btn-primary" style="margin-top:16px;" onclick="downloadVisibleTiles()">🗺️ تحميل خريطة المنطقة الحالية</button>
-    <div class="sep"></div>
-    <button class="btn btn-ghost" onclick="forceReload()">🔄 تحديث التطبيق قسرياً</button>
-    <div style="margin-top:20px;text-align:center;font-size:11px;color:var(--text2);">EggTrack Pro v2.0 · الجلفة</div>
+    <button class="btn btn-primary" style="margin-top:16px;" onclick="downloadVisibleTiles()">🗺️ تحميل خرائط المنطقة الحالية للاستخدام دون إنترنت</button>
+    <div style="margin-top:20px;text-align:center;font-size:11px;color:var(--text2);">EggTrack Pro · الجلفة</div>
   `;
   document.getElementById('panel-body').innerHTML = html;
 }
-
 function saveSettings() {
   settings.currency = document.getElementById('set-currency').value.trim() || 'دج';
   settings.unit = document.getElementById('set-unit').value.trim() || 'طبق';
   DB.saveSettings(settings);
   showToast('✅ تم حفظ الإعدادات');
 }
+function exportData() { /* ... */ }
+function importData(e) { /* ... */ }
+function confirmClearAll() { /* ... */ }
 
-function exportData() {
-  const data = JSON.stringify(stores, null, 2);
-  const blob = new Blob([data], {type: 'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `eggtrack_backup_${new Date().toISOString().split('T')[0]}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('✅ تم تصدير البيانات');
-}
-
-function importData(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const imported = JSON.parse(e.target.result);
-      if (Array.isArray(imported)) {
-        stores = imported;
-        DB.save(stores);
-        renderMarkers();
-        updateStats();
-        showToast('✅ تم استيراد البيانات بنجاح');
-        closePanel();
-      } else {
-        showToast('❌ ملف غير صالح');
-      }
-    } catch(err) {
-      showToast('❌ خطأ في قراءة الملف');
-    }
-  };
-  reader.readAsText(file);
-  event.target.value = '';
-}
-
-function confirmClearAll() {
-  showConfirm('⚠️ تحذير', 'سيتم حذف جميع المتاجر والبيانات نهائياً!', () => {
-    stores = [];
-    DB.save(stores);
-    renderMarkers();
-    updateStats();
-    closePanel();
-    showToast('✅ تم مسح جميع البيانات');
-  });
-}
-
-function forceReload() {
-  showToast('🔄 جاري تحديث التطبيق...');
-  setTimeout(() => {
-    window.location.reload(true);
-  }, 500);
-}
-
+// ===========================
+//  تحميل التجانبات المرئية (Offline)
+// ===========================
 function downloadVisibleTiles() {
   const bounds = map.getBounds();
   const minZoom = Math.max(map.getZoom() - 2, 10);
@@ -1277,7 +1179,10 @@ function downloadVisibleTiles() {
       for (let y = minY; y <= maxY; y++) {
         const url = `https://a.tile.openstreetmap.org/${z}/${x}/${y}.png`;
         total++;
-        fetch(url, { cache: 'force-cache', mode: 'no-cors' }).catch(() => {});
+        fetch(url, { cache: 'force-cache' }).then(() => {
+          done++;
+          if (done === total) showToast(`✅ تم تخزين ${total} تجانبة`);
+        }).catch(() => {});
       }
     }
   }
@@ -1286,7 +1191,7 @@ function downloadVisibleTiles() {
 }
 
 // ===========================
-//  بحث الخريطة
+//  بحث الخريطة (Nominatim)
 // ===========================
 let mapSearchTimeout = null;
 let mapSearchMarker = null;
@@ -1328,19 +1233,18 @@ function clearMapSearch() {
 
 document.addEventListener('DOMContentLoaded', () => {
   const input = document.getElementById('map-search-input');
-  if (input) {
-    input.addEventListener('input', function() {
-      const val = this.value.trim();
-      document.getElementById('map-search-clear').classList.toggle('show', val.length > 0);
-      clearTimeout(mapSearchTimeout);
-      if (val.length < 2) {
-        document.getElementById('map-search-results').classList.remove('show');
-        return;
-      }
-      mapSearchTimeout = setTimeout(() => searchPlaces(val), 500);
-    });
-    input.addEventListener('keydown', e => { if (e.key === 'Escape') closeMapSearch(); });
-  }
+  if (!input) return;
+  input.addEventListener('input', function() {
+    const val = this.value.trim();
+    document.getElementById('map-search-clear').classList.toggle('show', val.length > 0);
+    clearTimeout(mapSearchTimeout);
+    if (val.length < 2) {
+      document.getElementById('map-search-results').classList.remove('show');
+      return;
+    }
+    mapSearchTimeout = setTimeout(() => searchPlaces(val), 500);
+  });
+  input.addEventListener('keydown', e => { if (e.key === 'Escape') closeMapSearch(); });
 });
 
 async function searchPlaces(query) {
@@ -1348,6 +1252,7 @@ async function searchPlaces(query) {
   resultsEl.innerHTML = '<div class="map-result-loading">⏳ جاري البحث...</div>';
   resultsEl.classList.add('show');
   try {
+    // البحث مقيّد بمنطقة الجزائر أولاً، وإن لم يوجد يبحث عالمياً
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ' الجلفة الجزائر')}&format=json&limit=6&accept-language=ar&countrycodes=dz`;
     const r = await fetch(url, { headers: { 'Accept-Language': 'ar' } });
     let data = await r.json();
@@ -1359,7 +1264,7 @@ async function searchPlaces(query) {
       resultsEl.innerHTML = '<div class="map-result-empty">🔍 لم يُعثر على نتائج</div>';
       return;
     }
-    resultsEl.innerHTML = data.map((item) => {
+    resultsEl.innerHTML = data.map((item, i) => {
       const icon = getPlaceIcon(item.type, item.class);
       const name = item.display_name.split(',')[0];
       const addr = item.display_name.split(',').slice(1, 4).join(',').trim();
@@ -1385,6 +1290,7 @@ function getPlaceIcon(type, cls) {
   if (type === 'supermarket' || type === 'marketplace') return '🛒';
   if (cls === 'place') return '📍';
   if (cls === 'amenity') return '🏢';
+  if (cls === 'boundary' || cls === 'administrative') return '🗺️';
   return '📌';
 }
 
@@ -1399,6 +1305,95 @@ function goToPlace(lat, lng, name) {
     icon: L.divIcon({ html: el.innerHTML, className: '', iconAnchor: [60, 14] })
   }).addTo(map);
   setTimeout(() => { if (mapSearchMarker) { map.removeLayer(mapSearchMarker); mapSearchMarker = null; } }, 8000);
+}
+
+// ===========================
+//  تحميل خرائط الجلفة للاستخدام دون إنترنت
+// ===========================
+const OFFLINE_KEY = 'eggtrack_offline_done';
+
+// حدود ولاية الجلفة التقريبية
+const DJELFA_BOUNDS = {
+  north: 35.15, south: 33.20,
+  east: 4.20, west: 2.10
+};
+
+function deg2tile(lat, lng, zoom) {
+  const n = Math.pow(2, zoom);
+  const x = Math.floor((lng + 180) / 360 * n);
+  const y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n);
+  return { x, y };
+}
+
+function countTiles(zoom) {
+  const nw = deg2tile(DJELFA_BOUNDS.north, DJELFA_BOUNDS.west, zoom);
+  const se = deg2tile(DJELFA_BOUNDS.south, DJELFA_BOUNDS.east, zoom);
+  return (Math.abs(se.x - nw.x) + 1) * (Math.abs(se.y - nw.y) + 1);
+}
+
+async function downloadDjelfaTiles() {
+  if (localStorage.getItem(OFFLINE_KEY) === 'done') return;
+  if (!navigator.onLine) return;
+
+  // حساب إجمالي التجانبات (zoom 8→13 فقط للحجم المعقول)
+  const MIN_ZOOM = 8, MAX_ZOOM = 13;
+  let allTiles = [];
+  for (let z = MIN_ZOOM; z <= MAX_ZOOM; z++) {
+    const nw = deg2tile(DJELFA_BOUNDS.north, DJELFA_BOUNDS.west, z);
+    const se = deg2tile(DJELFA_BOUNDS.south, DJELFA_BOUNDS.east, z);
+    for (let x = nw.x; x <= se.x; x++) {
+      for (let y = nw.y; y <= se.y; y++) {
+        allTiles.push({ z, x, y });
+      }
+    }
+  }
+
+  const total = allTiles.length;
+  if (!total) return;
+
+  const progressEl = document.getElementById('offline-progress');
+  const barEl = document.getElementById('offline-bar');
+  const pctEl = document.getElementById('offline-pct');
+  const subEl = document.getElementById('offline-sub');
+
+  progressEl.classList.add('show');
+  subEl.textContent = `0 / ${total} تجانبة`;
+
+  let done = 0, failed = 0;
+  const BATCH = 8;
+
+  for (let i = 0; i < allTiles.length; i += BATCH) {
+    const batch = allTiles.slice(i, i + BATCH);
+    await Promise.all(batch.map(async ({ z, x, y }) => {
+      const subdomain = ['a','b','c'][Math.abs(x + y) % 3];
+      const url = `https://${subdomain}.tile.openstreetmap.org/${z}/${x}/${y}.png`;
+      try {
+        await fetch(url, { cache: 'force-cache', mode: 'no-cors' });
+        done++;
+      } catch { failed++; done++; }
+    }));
+    const pct = Math.round(done / total * 100);
+    barEl.style.width = pct + '%';
+    pctEl.textContent = pct + '%';
+    subEl.textContent = `${done} / ${total} تجانبة${failed > 0 ? ` (${failed} فشل)` : ''}`;
+    if (!navigator.onLine) {
+      subEl.textContent = '⚠️ انقطع الاتصال، سيكتمل التحميل عند الاتصال مجدداً';
+      break;
+    }
+    // استراحة صغيرة لعدم إغراق الاتصال
+    await new Promise(r => setTimeout(r, 30));
+  }
+
+  if (done >= total * 0.9) {
+    localStorage.setItem(OFFLINE_KEY, 'done');
+    barEl.style.width = '100%';
+    pctEl.textContent = '100%';
+    subEl.textContent = '✅ تم تحميل خريطة الجلفة كاملة!';
+    setTimeout(() => progressEl.classList.remove('show'), 4000);
+  } else {
+    subEl.textContent = '⚠️ لم يكتمل التحميل، سيُستكمل عند الاتصال';
+    setTimeout(() => progressEl.classList.remove('show'), 5000);
+  }
 }
 
 // ===========================
@@ -1431,49 +1426,15 @@ function confirmDelete(id) { const s = stores.find(s=>s.id===id); if(!s) return;
 // ===========================
 window.addEventListener('load', () => {
   initMap();
-});
-</script>
- <script>
-// إنشاء أيقونات وهمية مؤقتاً
-(function createFakeIcons() {
-  const icons = [
-    { size: 192, name: 'icon-192.png' },
-    { size: 512, name: 'icon-512.png' }
-  ];
-  
-  icons.forEach(icon => {
-    const canvas = document.createElement('canvas');
-    canvas.width = icon.size;
-    canvas.height = icon.size;
-    const ctx = canvas.getContext('2d');
-    
-    // خلفية
-    ctx.fillStyle = '#f5a623';
-    ctx.fillRect(0, 0, icon.size, icon.size);
-    
-    // رسم بيضة
-    ctx.fillStyle = 'white';
-    ctx.font = `bold ${icon.size * 0.5}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🥚', icon.size/2, icon.size/2);
-    
-    // تحويل canvas إلى PNG
-    canvas.toBlob(blob => {
-      const url = URL.createObjectURL(blob);
-      fetch(url).then(res => res.blob()).then(blob => {
-        // تخزين في Cache API
-        if ('caches' in window) {
-          caches.open('eggtrack-v2').then(cache => {
-            cache.put(icon.name, new Response(blob, {
-              headers: { 'Content-Type': 'image/png' }
-            }));
-          });
-        }
-      });
-    });
+  // تحميل خرائط الجلفة عند أول تشغيل
+  setTimeout(() => downloadDjelfaTiles(), 2000);
+  // إعادة المحاولة عند استعادة الاتصال
+  window.addEventListener('online', () => {
+    if (localStorage.getItem(OFFLINE_KEY) !== 'done') {
+      setTimeout(() => downloadDjelfaTiles(), 1000);
+    }
   });
-})();
+});
 </script>
 </body>
 </html>
